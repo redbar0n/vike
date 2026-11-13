@@ -216,13 +216,23 @@ function execHookBase<HookReturn>(
   let originalCalled = false
   let originalReturn: HookReturn
   let originalError: unknown
+  let originalThrew = false
   let call = () => {
     originalCalled = true
     try {
       originalReturn = callOriginal()
     } catch (err) {
+      originalThrew = true
       originalError = err
       throw err
+    }
+    // An async hook that rejects: record its error too, so that the `err !== originalError` check below doesn't print it a second time
+    // - This catch() is attached before +onHookCall's `await hook.call()`, so it records the error before that rethrows it
+    // - Only for a Promise: some then-ables (e.g. a query builder) start their work whenever then() is called, so attaching a handler would run that work a second time
+    if (originalReturn instanceof Promise) {
+      originalReturn.catch((err) => {
+        originalError = err
+      })
     }
     return originalReturn
   }
@@ -260,7 +270,7 @@ function execHookBase<HookReturn>(
   }
   // Start the call() chain
   call()
-  if (originalError) throw originalError
+  if (originalThrew) throw originalError
   return originalReturn!
 }
 

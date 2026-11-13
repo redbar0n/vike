@@ -10,6 +10,7 @@ import { updateType } from '../../../utils/updateType.js'
 import { getPageContextUrlComputed } from '../../../shared-server-client/getPageContextUrlComputed.js'
 import type { GlobalContextServerInternal } from '../globalContext.js'
 import type { PageContextInit } from '../renderPageServer.js'
+import type { handlePageContextRequestUrl } from './handlePageContextRequestUrl.js'
 import {
   createPageContextObject,
   createPageContextShared,
@@ -32,7 +33,7 @@ function createPageContextServer(
     | {
         isPrerendering: false
         urlHandler: null | ((url: string) => string)
-        isClientSideNavigation: boolean
+        isPageContextJsonRequest: ReturnType<typeof handlePageContextRequestUrl>['isPageContextJsonRequest']
       }
   ),
 ) {
@@ -47,7 +48,8 @@ function createPageContextServer(
     _baseAssets: globalContext.baseAssets,
     _pageContextInit: pageContextInit,
     _urlHandler: args.isPrerendering ? null : args.urlHandler,
-    isClientSideNavigation: args.isPrerendering ? false : args.isClientSideNavigation,
+    _isPageContextJsonRequest: args.isPrerendering ? null : args.isPageContextJsonRequest,
+    isClientSideNavigation: args.isPrerendering ? false : !!args.isPageContextJsonRequest,
   })
 
   objectAssign(pageContext, globalContext._globalConfigPublic)
@@ -94,11 +96,17 @@ function createPageContextServerWithoutGlobalContext(pageContextInit: PageContex
 
 function createPageContextBase(pageContextInit: PageContextInit | null, isPrerendering: boolean, requestId: number) {
   const pageContext = createPageContextObject()
+  objectAssign(pageContext, pageContextInit)
   objectAssign(pageContext, {
     isClientSide: false as const,
     isPrerendering,
     _requestId: requestId,
+    abortSignal:
+      pageContextInit?.abortSignal ??
+      // This `pageContext.abortSignal` is fake: it never aborts
+      // - It acts as a fallback and its only purpose is to make sure pageContext.abortSignal is always defined, so that the user can simply always listen to `pageContext.abortSignal` => significant DX improvement
+      //   - So that, for example, toggling +prerender doesn't break user code. (Otherwise `pageContext.abortSignal` would become `undefined` upon `+prerender === true`.)
+      new AbortController().signal,
   })
-  objectAssign(pageContext, pageContextInit)
   return pageContext
 }

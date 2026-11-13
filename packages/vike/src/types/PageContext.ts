@@ -135,6 +135,14 @@ type PageContextBuiltInCommon<Data> = PageContextConfig & {
   is404: boolean | null
 
   /**
+   * Whether the error page is being rendered.
+   *
+   * https://vike.dev/pageContext#isErrorPage
+   * https://vike.dev/error-page
+   */
+  isErrorPage: boolean
+
+  /**
    * Whether the page was navigated by the client-side router.
    *
    * https://vike.dev/pageContext#isClientSideNavigation
@@ -205,6 +213,12 @@ type PageContextInit = {
    * https://vike.dev/pageContext#headersOriginal
    */
   headersOriginal?: unknown // We set it to the type `unknown` instead of the type `HeadersInit` because `HeadersInit` isn't accurate: for example, `http.IncomingHttpHeaders` is a valid input for `new Headers()` but doesn't match the `HeadersInit` init.
+  /**
+   * Abort signal when the HTTP request is aborted (e.g. the user closes the browser tab, or navigates to another page).
+   *
+   * https://vike.dev/pageContext#abortSignal
+   */
+  abortSignal?: AbortSignal
   /** @deprecated Set `pageContextInit.urlOriginal` instead  */ // TO-DO/next-major-release: remove
   url?: string
 }
@@ -269,14 +283,18 @@ type PageContextBuiltInServer<Data> = PageContextBuiltInCommon<Data> &
     environments?: Record<string, { config: PageContextConfig['config']; pageContext: PageContextServer<Data> }>
 
     /**
-     * Whether to skip the `guard()`, `data()`, `onData()` and `onBeforeRender()` hooks
+     * Whether to skip the `guard()`, `data()`, `onData()` and `onBeforeRender()` hooks.
+     *
+     * A function is awaited after every `onCreatePageContext()` hook has resolved.
      */
-    _skipGuardAndData_experimentalRSC?: boolean
+    _skipGuardAndData_experimentalRSC?: boolean | (() => Promise<boolean>)
 
     isHydration?: undefined
     isBackwardNavigation?: undefined
     isHistoryNavigation?: undefined
+    isPrefetch?: undefined
     previousPageContext?: undefined
+    abortSignal: AbortSignal
   }
 
 type PageContextBuiltInClientWithClientRouting<Data> = Partial<PageContextBuiltInCommon<Data>> &
@@ -325,11 +343,23 @@ type PageContextBuiltInClientWithClientRouting<Data> = Partial<PageContextBuiltI
      */
     isHistoryNavigation: boolean
     /**
+     * Whether the URL is routed for prefetching a link (instead of navigating to it).
+     *
+     * https://vike.dev/pageContext#isPrefetch
+     */
+    isPrefetch?: true
+    /**
      * Upon client-side page navigation, you can use `pageContext.previousPageContext` to access the `pageContext` of the previous page.
      *
      * https://vike.dev/pageContext#previousPageContext
      */
     previousPageContext: PageContextClient<Data> | null
+    /**
+     * Abort signal when the user navigates to another page.
+     *
+     * https://vike.dev/pageContext#abortSignal
+     */
+    abortSignal: AbortSignal
     /**
      * List of previous `pageContext` aborted by `throw redirect()` or `throw render()` that led to the final rendered page.
      *
